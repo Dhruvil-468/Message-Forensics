@@ -1,0 +1,23 @@
+# Database & Runtime files
+*.db
+*.sqlite
+*.sqlite3
+secret.key
+
+
+# Python bytecode / cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+ENV/
+
+# OS / Editor files
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
