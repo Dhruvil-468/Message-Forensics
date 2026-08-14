@@ -8,21 +8,41 @@ survive server restarts.
 """
 
 import secrets
+import tempfile
+import os
 from pathlib import Path
 from itsdangerous import URLSafeTimedSerializer, BadSignature, SignatureExpired
 from fastapi import Request, HTTPException, status
 
-SECRET_KEY_PATH = Path(__file__).parent / "secret.key"
+def _get_secret_key_path() -> Path:
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return Path(tempfile.gettempdir()) / "secret.key"
+    try:
+        test_file = Path(__file__).parent / ".write_test_auth"
+        test_file.touch()
+        test_file.unlink()
+        return Path(__file__).parent / "secret.key"
+    except Exception:
+        return Path(tempfile.gettempdir()) / "secret.key"
+
+SECRET_KEY_PATH = _get_secret_key_path()
 COOKIE_NAME = "spam_forensics_session"
 MAX_AGE_SECONDS = 60 * 60 * 24 * 7  # 7 days
 
 
 def _load_or_create_secret() -> str:
+    env_secret = os.environ.get("SECRET_KEY")
+    if env_secret:
+        return env_secret.strip()
     if SECRET_KEY_PATH.exists():
         return SECRET_KEY_PATH.read_text().strip()
     key = secrets.token_hex(32)
-    SECRET_KEY_PATH.write_text(key)
+    try:
+        SECRET_KEY_PATH.write_text(key)
+    except Exception:
+        pass
     return key
+
 
 
 _serializer = URLSafeTimedSerializer(_load_or_create_secret(), salt="session")

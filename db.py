@@ -17,8 +17,21 @@ import os
 import secrets
 from datetime import datetime, timezone
 from pathlib import Path
+import tempfile
 
-DB_PATH = Path(__file__).parent / "spam_forensics.db"
+def _get_db_path() -> Path:
+
+    if os.environ.get("VERCEL") or os.environ.get("AWS_LAMBDA_FUNCTION_NAME"):
+        return Path(tempfile.gettempdir()) / "spam_forensics.db"
+    try:
+        test_file = Path(__file__).parent / ".write_test_db"
+        test_file.touch()
+        test_file.unlink()
+        return Path(__file__).parent / "spam_forensics.db"
+    except Exception:
+        return Path(tempfile.gettempdir()) / "spam_forensics.db"
+
+DB_PATH = _get_db_path()
 
 
 def get_conn():
