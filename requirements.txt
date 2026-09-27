@@ -6,3 +6,5 @@ uvicorn[standard]
 pydantic
 itsdangerous
 reportlab
+opencv-python-headless
+python-multipart

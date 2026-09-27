@@ -1,0 +1,1017 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Message Forensics — Spam Detector</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Special+Elite&family=Courier+Prime:wght@400;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper: #e4dcc3;
+    --paper-dark: #d7cca9;
+    --ink: #232323;
+    --navy: #2b3a55;
+    --stamp-red: #a13328;
+    --stamp-amber: #8a5d10;
+    --stamp-green: #2f6844;
+    --line: rgba(35,35,35,0.18);
+  }
+
+  *{ box-sizing:border-box; }
+
+  html,body{
+    margin:0;
+    min-height:100vh;
+    background:
+      radial-gradient(ellipse at 20% 0%, rgba(255,255,255,0.15), transparent 60%),
+      var(--paper);
+    color:var(--ink);
+    font-family:'IBM Plex Sans', sans-serif;
+  }
+
+  body{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    padding:48px 20px 80px;
+  }
+
+  .hidden{ display:none !important; }
+
+  /* ---------- shared file/card chrome ---------- */
+  .file{ width:100%; max-width:720px; position:relative; }
+  .file.narrow{ max-width:420px; }
+
+  .tab{
+    width:180px; height:34px;
+    background:var(--paper-dark);
+    border:1px solid var(--line);
+    border-bottom:none;
+    border-radius:8px 14px 0 0;
+    margin-left:28px;
+    display:flex; align-items:center; padding-left:16px;
+    font-size:11px; letter-spacing:0.12em;
+    color:var(--navy); font-weight:600;
+  }
+
+  .card{
+    background:var(--paper-dark);
+    border:1px solid var(--line);
+    border-radius:2px 10px 10px 10px;
+    padding:36px 36px 44px;
+    box-shadow: 0 1px 0 rgba(255,255,255,0.4) inset, 0 18px 40px -20px rgba(0,0,0,0.35);
+  }
+
+  .eyebrow{
+    font-size:11px; letter-spacing:0.18em; text-transform:uppercase;
+    color:var(--navy); font-weight:600;
+    display:flex; justify-content:space-between;
+    border-bottom:1px dashed var(--line);
+    padding-bottom:10px; margin-bottom:18px;
+  }
+
+  h1{
+    font-family:'Special Elite', cursive; font-weight:400;
+    font-size:30px; line-height:1.15; margin:0 0 8px; letter-spacing:0.01em;
+  }
+  .file.narrow h1{ font-size:24px; }
+
+  .sub{ font-size:14px; color:#4a4a42; line-height:1.55; margin:0 0 26px; max-width:52ch; }
+
+  label.field-label{
+    display:block; font-size:11px; letter-spacing:0.1em; text-transform:uppercase;
+    color:var(--navy); font-weight:600; margin-bottom:6px;
+  }
+
+  input[type=text], input[type=password], textarea{
+    width:100%;
+    background:#f2ecd8;
+    border:1px solid var(--line);
+    border-left:3px solid var(--navy);
+    border-radius:2px;
+    padding:12px 14px;
+    font-family:'Courier Prime', monospace;
+    font-size:15px; line-height:1.5;
+    color:var(--ink);
+    outline:none;
+  }
+  input:focus, textarea:focus{
+    border-left-color:var(--stamp-red);
+    box-shadow:0 0 0 3px rgba(43,58,85,0.12);
+  }
+  input::placeholder, textarea::placeholder{ color:#8a836b; }
+
+  textarea{ min-height:120px; resize:vertical; }
+
+  .field{ margin-bottom:16px; }
+
+  .row{ display:flex; align-items:center; justify-content:space-between; margin-top:14px; gap:12px; flex-wrap:wrap; }
+
+  button.primary{
+    font-family:'IBM Plex Sans', sans-serif; font-weight:600; font-size:13px;
+    letter-spacing:0.06em; text-transform:uppercase;
+    background:var(--ink); color:var(--paper);
+    border:none; padding:13px 22px; border-radius:3px; cursor:pointer;
+    transition:transform 0.08s ease, background 0.15s ease;
+    width:100%;
+  }
+  button.primary:hover{ background:var(--navy); }
+  button.primary:active{ transform:scale(0.98); }
+  button.primary:disabled{ opacity:0.5; cursor:progress; }
+
+  button.link-btn{
+    background:none; border:none; padding:0; font:inherit; color:var(--navy);
+    text-decoration:underline; text-underline-offset:2px; cursor:pointer;
+  }
+  button.link-btn:hover{ color:var(--stamp-red); }
+
+  .divider{ border:none; border-top:1px dashed var(--line); margin:32px 0 26px; }
+
+  .error{ color:var(--stamp-red); font-size:13px; margin-top:10px; display:none; }
+  .error.show{ display:block; }
+  .note{ font-size:12px; color:#5c5747; margin-top:16px; text-align:center; }
+
+  /* ---------- login/signup ---------- */
+  #authView{ display:flex; flex-direction:column; align-items:center; }
+  .badge-icon{
+    width:52px; height:52px; border:2px solid var(--navy); border-radius:50%;
+    display:flex; align-items:center; justify-content:center;
+    font-family:'Special Elite', cursive; font-size:20px; color:var(--navy);
+    margin:0 auto 14px;
+  }
+
+  /* ---------- top bar (signed-in) ---------- */
+  .topbar{
+    width:100%; max-width:720px;
+    display:flex; align-items:center; justify-content:space-between;
+    margin-bottom:14px; padding:0 4px;
+  }
+  .whoami{ font-size:12px; color:#4a4a42; }
+  .whoami b{ color:var(--ink); font-family:'Courier Prime', monospace; }
+  .topbar button{
+    background:none; border:1px solid var(--line); color:var(--ink);
+    font-size:11px; letter-spacing:0.06em; text-transform:uppercase;
+    padding:7px 12px; border-radius:3px; cursor:pointer; font-weight:600;
+  }
+  .topbar button:hover{ border-color:var(--stamp-red); color:var(--stamp-red); }
+
+  /* ---------- tabs ---------- */
+  .tabs{ display:flex; gap:6px; margin-left:28px; }
+  .tabs button{
+    padding:9px 18px; border:1px solid var(--line); border-bottom:none;
+    background:var(--paper); color:#5c5747; font-size:11px; font-weight:600;
+    letter-spacing:0.1em; text-transform:uppercase; cursor:pointer;
+    border-radius:8px 8px 0 0;
+  }
+  .tabs button.active{ background:var(--paper-dark); color:var(--navy); }
+
+  /* ---------- evidence / analyze results (shared) ---------- */
+  .evidence-label{ font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--navy); font-weight:600; margin-bottom:10px; }
+
+  .evidence{
+    background:#f2ecd8; border:1px solid var(--line); border-radius:2px;
+    padding:18px 20px; font-family:'Courier Prime', monospace; font-size:15px;
+    line-height:1.9; white-space:pre-wrap; word-wrap:break-word; position:relative;
+  }
+
+  mark{ background:none; color:inherit; padding:1px 1px; border-radius:2px; box-decoration-break:clone; -webkit-box-decoration-break:clone; }
+  mark.urgency{ background:rgba(232,163,61,0.55); }
+  mark.scarcity{ background:rgba(155,111,176,0.45); }
+  mark.money_bait{ background:rgba(96,163,120,0.5); }
+  mark.false_authority{ background:rgba(90,140,192,0.45); }
+  mark.pressure_to_act{ background:rgba(197,90,80,0.45); }
+  mark.has_url{ background:rgba(197,90,80,0.45); text-decoration:underline wavy var(--stamp-red); }
+  mark.has_phone{ background:rgba(90,140,192,0.45); }
+
+  .stamp-zone{ position:relative; min-height:96px; display:flex; align-items:center; justify-content:flex-end; margin:8px 0 6px; }
+
+  .stamp{
+    font-family:'Special Elite', cursive; font-size:26px; letter-spacing:0.08em;
+    padding:10px 22px; border:3px solid; border-radius:6px 16px 10px 14px / 12px 8px 16px 10px;
+    transform:rotate(-7deg); mix-blend-mode:multiply; opacity:0; text-transform:uppercase; position:relative;
+  }
+  .stamp::after{
+    content:""; position:absolute; inset:4px; border:1px solid currentColor;
+    border-radius:4px 14px 8px 12px / 10px 6px 14px 8px; opacity:0.6;
+  }
+  .stamp.show{ animation:thump 0.45s cubic-bezier(.2,1.4,.4,1) forwards; }
+  @keyframes thump{
+    0%{ opacity:0; transform:rotate(-7deg) scale(1.6); }
+    60%{ opacity:1; transform:rotate(-7deg) scale(0.94); }
+    100%{ opacity:0.92; transform:rotate(-7deg) scale(1); }
+  }
+  .stamp.SPAM{ color:var(--stamp-red); border-color:var(--stamp-red); }
+  .stamp.SUSPICIOUS{ color:var(--stamp-amber); border-color:var(--stamp-amber); }
+  .stamp.HAM{ color:var(--stamp-green); border-color:var(--stamp-green); }
+
+  .readout{ display:grid; grid-template-columns:1fr 1fr; gap:10px 24px; margin:22px 0 26px; font-size:12px; color:#4a4a42; }
+  .readout div{ display:flex; justify-content:space-between; border-bottom:1px dotted var(--line); padding-bottom:5px; }
+  .readout span:last-child{ font-family:'Courier Prime', monospace; color:var(--ink); font-weight:700; }
+
+  .tactic-log-label{ font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--navy); font-weight:600; margin-bottom:12px; }
+  .tactic{ display:grid; grid-template-columns:150px 1fr 42px; align-items:center; gap:12px; margin-bottom:9px; font-size:13px; }
+  .tactic .swatch{ width:10px; height:10px; border-radius:2px; display:inline-block; margin-right:7px; vertical-align:middle; }
+  .meter{ height:8px; background:rgba(35,35,35,0.08); border-radius:4px; overflow:hidden; }
+  .meter i{ display:block; height:100%; border-radius:4px; transform-origin:left; animation:grow 0.5s ease forwards; }
+  @keyframes grow{ from{ transform:scaleX(0); } to{ transform:scaleX(1); } }
+  .tactic .pct{ text-align:right; font-family:'Courier Prime', monospace; color:#4a4a42; }
+  .empty-log{ font-size:13px; color:#6b6656; font-style:italic; }
+
+  .narrative-label{ font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--navy); font-weight:600; margin:26px 0 12px; }
+  .narrative{ font-size:14px; line-height:1.75; color:#332f24; }
+  .narrative p{ margin:0 0 13px; }
+  .narrative p:last-child{ margin-bottom:0; padding-top:6px; border-top:1px dashed var(--line); margin-top:6px; font-weight:600; color:var(--navy); }
+
+  .report-btn{
+    font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;
+    background:var(--navy); color:var(--paper);
+    border:none; padding:9px 16px; border-radius:3px; cursor:pointer;
+  }
+  .report-btn:hover{ background:var(--ink); }
+
+  .results{ display:none; }
+  .results.show{ display:block; animation:fadeUp 0.35s ease; }
+  @keyframes fadeUp{ from{ opacity:0; transform:translateY(6px); } to{ opacity:1; transform:translateY(0); } }
+
+  .footer-note{ margin-top:30px; padding-top:16px; border-top:1px dashed var(--line); font-size:11px; color:#7a7461; line-height:1.6; }
+
+  .examples{ font-size:12px; color:#5c5747; }
+  .examples button{ margin-right:10px; }
+
+  /* ---------- QR drop zone & source tags ---------- */
+  .drop-zone{
+    width:100%;
+    background:#f2ecd8;
+    border:2px dashed var(--line);
+    border-left:3px solid var(--navy);
+    border-radius:2px;
+    padding:28px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color 0.15s ease, background 0.15s ease;
+  }
+  .drop-zone:hover, .drop-zone.dragover{
+    border-color:var(--navy);
+    background:#ece4ce;
+    border-left-color:var(--stamp-red);
+  }
+  .drop-zone-content{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .drop-icon{ font-size:26px; line-height:1; color:var(--navy); }
+  .drop-prompt{ font-size:14px; color:var(--ink); }
+  .drop-hint{ font-size:11px; color:#7a7461; }
+  .drop-file-preview{ display:flex; align-items:center; justify-content:center; gap:18px; text-align:left; }
+  .source-tag{
+    font-family:'IBM Plex Sans', sans-serif; font-size:9px; font-weight:700;
+    letter-spacing:0.06em; text-transform:uppercase;
+    background:var(--navy); color:var(--paper);
+    padding:2px 5px; border-radius:2px; vertical-align:middle;
+    margin-right:6px; display:inline-block;
+  }
+
+  /* ---------- evidence log (history) ---------- */
+  .log-toolbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; gap:10px; flex-wrap:wrap; }
+  .log-count{ font-size:12px; color:#5c5747; }
+  .export-btn{
+    font-size:11px; font-weight:600; letter-spacing:0.06em; text-transform:uppercase;
+    background:none; border:1px solid var(--navy); color:var(--navy);
+    padding:9px 16px; border-radius:3px; cursor:pointer;
+  }
+  .export-btn:hover{ background:var(--navy); color:var(--paper); }
+
+  .case-row{
+    display:grid; grid-template-columns:86px 1fr 110px 130px 34px;
+    gap:12px; align-items:center;
+    padding:12px 6px; border-bottom:1px solid var(--line);
+    font-size:13px; cursor:pointer;
+  }
+  .case-row:hover{ background:rgba(255,255,255,0.25); }
+  .case-row .tag{
+    font-family:'Courier Prime', monospace; font-size:10px; font-weight:700;
+    letter-spacing:0.05em; padding:3px 7px; border-radius:3px; text-align:center;
+    border:1px solid currentColor;
+  }
+  .case-row .tag.SPAM{ color:var(--stamp-red); }
+  .case-row .tag.SUSPICIOUS{ color:var(--stamp-amber); }
+  .case-row .tag.HAM{ color:var(--stamp-green); }
+  .case-row .snippet{ font-family:'Courier Prime', monospace; color:#4a4a42; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .case-row .conf{ font-family:'Courier Prime', monospace; color:#4a4a42; text-align:right; }
+  .case-row .when{ color:#7a7461; font-size:11px; }
+  .case-row .del{ background:none; border:none; color:#a99e7f; cursor:pointer; font-size:15px; text-align:right; }
+  .case-row .del:hover{ color:var(--stamp-red); }
+
+  .log-empty{ font-size:14px; color:#6b6656; font-style:italic; padding:24px 4px; }
+
+  .back-btn{
+    background:none; border:none; color:var(--navy); font-size:12px; cursor:pointer;
+    margin-bottom:16px; padding:0; text-decoration:underline; text-underline-offset:2px;
+  }
+
+  @media (max-width:520px){
+    .card{ padding:26px 20px 34px; }
+    h1{ font-size:24px; }
+    .readout{ grid-template-columns:1fr; }
+    .tactic{ grid-template-columns:110px 1fr 36px; }
+    .case-row{ grid-template-columns:64px 1fr 34px; }
+    .case-row .conf, .case-row .when{ display:none; }
+  }
+
+  @media print{
+    body > *:not(.file){ display:none !important; }
+    .topbar, .tabs, .log-toolbar, .footer-note, textarea, .row{ display:none !important; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ======================= AUTH VIEW ======================= -->
+<div id="authView" class="file narrow">
+  <div class="tab">CLEARANCE</div>
+  <div class="card">
+    <div class="badge-icon">MF</div>
+    <div class="eyebrow"><span>Investigator Sign-In</span><span id="authMode">LOGIN</span></div>
+    <h1 id="authTitle">Sign in to open the file.</h1>
+    <p class="sub" id="authSub">Every message you analyze is saved to your personal evidence log — sign in to keep and review it.</p>
+
+    <div class="field">
+      <label class="field-label">Badge name (username)</label>
+      <input type="text" id="authUsername" placeholder="e.g. investigator_lee" autocomplete="username">
+    </div>
+    <div class="field">
+      <label class="field-label">Passphrase</label>
+      <input type="password" id="authPassword" placeholder="At least 6 characters" autocomplete="current-password">
+    </div>
+
+    <button class="primary" id="authSubmit">Sign in</button>
+    <div class="error" id="authError"></div>
+    <p class="note">
+      <span id="toSignup">New here? <button class="link-btn" id="toSignupBtn">Open a case file</button></span>
+      <span id="toLogin" class="hidden">Already have a badge? <button class="link-btn" id="toLoginBtn">Sign in</button></span>
+    </p>
+  </div>
+</div>
+
+<!-- ======================= MAIN APP (signed in) ======================= -->
+<div id="appView" class="hidden" style="width:100%; display:flex; flex-direction:column; align-items:center;">
+  <div class="topbar">
+    <div class="whoami">Signed in as <b id="whoUsername"></b></div>
+    <button id="logoutBtn">Sign out</button>
+  </div>
+
+  <div class="file">
+    <div style="display:flex; align-items:flex-end;">
+      <div class="tab">CASE FILE</div>
+      <div class="tabs">
+        <button id="tabAnalyze" class="active">Analyze</button>
+        <button id="tabQR">QR Analyzer</button>
+        <button id="tabLog">Evidence Log</button>
+      </div>
+    </div>
+
+    <!-- ---------- ANALYZE PANEL ---------- -->
+    <div class="card" id="panelAnalyze">
+      <div class="eyebrow"><span>Message Forensics</span><span id="caseNumber">No. 000001</span></div>
+      <h1>Paste a message. We'll mark the tricks.</h1>
+      <p class="sub">This runs a real trained classifier, not a script. It reads the message for word patterns <em>and</em> for known manipulation tactics — urgency, false authority, money bait — then shows you exactly which words gave it away. Every result is saved to your evidence log.</p>
+
+      <textarea id="input" placeholder="Paste a text, email, or DM here…">URGENT! You have WON a $1000 Walmart gift card. Claim now at bit.ly/xyz before it expires!!!</textarea>
+
+      <div class="row">
+        <div class="examples">
+          Try:
+          <button class="link-btn" data-ex="phish">a phishing text</button>
+          <button class="link-btn" data-ex="normal">an ordinary message</button>
+        </div>
+        <button class="primary" id="analyzeBtn" style="width:auto;">Analyze message</button>
+      </div>
+      <div class="error" id="analyzeError">Something went wrong reaching the model. Is the server running?</div>
+
+      <hr class="divider">
+
+      <div class="results" id="results">
+        <div class="evidence-label">Evidence — annotated</div>
+        <div class="evidence" id="evidence"></div>
+
+        <div class="stamp-zone"><div class="stamp" id="stamp"></div></div>
+
+        <div class="readout">
+          <div><span>Overall confidence</span><span id="roConfidence">—</span></div>
+          <div><span>Word-pattern score</span><span id="roText">—</span></div>
+          <div><span>Tactic score</span><span id="roTactic">—</span></div>
+          <div><span>Verdict</span><span id="roVerdict">—</span></div>
+        </div>
+
+        <div class="tactic-log-label">Tactic log</div>
+        <div id="tacticLog"></div>
+
+        <div class="narrative-label">How we reached this verdict</div>
+        <div class="narrative" id="narrative"></div>
+
+        <div class="row" style="margin-top:22px;">
+          <span style="font-size:11px; color:#7a7461;">Saved to your evidence log automatically.</span>
+          <button class="report-btn" id="downloadReportBtn">Download evidence report (PDF)</button>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        Trained on the SMS Spam Collection dataset (5,572 real messages). The tactic layer is rule-based on top of the ML model — verdicts are model output, not a guarantee. When in doubt about a real message, don't click the link.
+      </div>
+    </div>
+
+    <!-- ---------- QR ANALYZER PANEL ---------- -->
+    <div class="card hidden" id="panelQR">
+      <div class="eyebrow"><span>QR Forensics</span><span id="qrCaseNumber">No. 000001</span></div>
+      <h1>Upload a QR code. We'll decode and inspect it.</h1>
+      <p class="sub">Drag &amp; drop or select an image containing a QR code. We decode the embedded payload, check it against manipulation tactics and phishing patterns, and stamp the verdict into your evidence log.</p>
+
+      <div class="drop-zone" id="qrDropZone">
+        <input type="file" id="qrFileInput" accept="image/*" class="hidden">
+        <div class="drop-zone-content" id="qrDropContent">
+          <div class="drop-icon">&#9974;</div>
+          <div class="drop-prompt"><strong>Drop a QR code image here</strong> or <button type="button" class="link-btn" id="qrBrowseBtn">browse files</button></div>
+          <div class="drop-hint">Supports PNG, JPG, JPEG, WEBP, BMP</div>
+        </div>
+        <div class="drop-file-preview hidden" id="qrPreviewZone">
+          <img id="qrImagePreview" alt="QR Preview" style="max-height:130px; max-width:130px; border:1px solid var(--line); border-radius:2px; object-fit:contain; background:#f2ecd8;">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <span id="qrFileName" style="font-family:'Courier Prime', monospace; font-size:13px; font-weight:700; word-break:break-all;"></span>
+            <span id="qrFileSize" style="font-size:11px; color:#5c5747;"></span>
+            <button type="button" class="link-btn" id="qrChangeBtn" style="align-self:flex-start; margin-top:6px;">Choose another image</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div></div>
+        <button class="primary" id="qrAnalyzeBtn" style="width:auto;" disabled>Scan &amp; analyze QR</button>
+      </div>
+      <div class="error" id="qrError">Something went wrong analyzing the QR code.</div>
+
+      <hr class="divider">
+
+      <div class="results" id="qrResults">
+        <div class="field" style="margin-bottom:22px;">
+          <div class="evidence-label">Decoded content:</div>
+          <div class="evidence" id="qrDecodedContent" style="font-size:14px; padding:12px 16px; background:#ece4cd; border-left:3px solid var(--navy);"></div>
+        </div>
+
+        <div class="evidence-label">Evidence — annotated</div>
+        <div class="evidence" id="qrEvidence"></div>
+
+        <div class="stamp-zone"><div class="stamp" id="qrStamp"></div></div>
+
+        <div class="readout">
+          <div><span>Overall confidence</span><span id="roQrConfidence">—</span></div>
+          <div><span>Word-pattern score</span><span id="roQrText">—</span></div>
+          <div><span>Tactic score</span><span id="roQrTactic">—</span></div>
+          <div><span>Verdict</span><span id="roQrVerdict">—</span></div>
+        </div>
+
+        <div class="tactic-log-label">Tactic log</div>
+        <div id="qrTacticLog"></div>
+
+        <div class="narrative-label">How we reached this verdict</div>
+        <div class="narrative" id="qrNarrative"></div>
+
+        <div class="row" style="margin-top:22px;">
+          <span style="font-size:11px; color:#7a7461;">Saved to your evidence log automatically.</span>
+          <button class="report-btn" id="downloadQrReportBtn">Download evidence report (PDF)</button>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        QR codes are frequently used in quishing attacks to evade message filters by concealing malicious URLs in image payloads. Payloads are decoded and tested against the same hybrid ML and heuristic tactic engine.
+      </div>
+    </div>
+
+    <!-- ---------- EVIDENCE LOG PANEL (list) ---------- -->
+    <div class="card hidden" id="panelLog">
+      <div class="eyebrow"><span>Evidence Log</span><span id="logCaseNumber">ARCHIVE</span></div>
+      <h1>Every case you've filed.</h1>
+      <p class="sub">Everything you've analyzed while signed in, kept here for reference. Click a row to reopen it, or export the whole log to keep as a record.</p>
+
+      <div class="log-toolbar">
+        <span class="log-count" id="logCount">0 entries</span>
+        <button class="export-btn" id="exportBtn">Export evidence log (.json)</button>
+      </div>
+
+      <div id="logList"></div>
+      <div class="log-empty hidden" id="logEmpty">No cases filed yet. Analyze a message to start your log.</div>
+    </div>
+
+    <!-- ---------- EVIDENCE LOG PANEL (detail) ---------- -->
+    <div class="card hidden" id="panelLogDetail">
+      <button class="back-btn" id="backToLog">&larr; Back to evidence log</button>
+      <div class="eyebrow"><span>Case Detail</span><span id="detailWhen">—</span></div>
+
+      <div class="evidence-label">Evidence — annotated</div>
+      <div class="evidence" id="detailEvidence"></div>
+
+      <div class="stamp-zone"><div class="stamp" id="detailStamp"></div></div>
+
+      <div class="readout">
+        <div><span>Overall confidence</span><span id="detailConfidence">—</span></div>
+        <div><span>Word-pattern score</span><span id="detailText">—</span></div>
+        <div><span>Tactic score</span><span id="detailTactic">—</span></div>
+        <div><span>Verdict</span><span id="detailVerdict">—</span></div>
+      </div>
+
+      <div class="tactic-log-label">Tactic log</div>
+      <div id="detailTacticLog"></div>
+
+      <div class="narrative-label">How we reached this verdict</div>
+      <div class="narrative" id="detailNarrative"></div>
+
+      <div class="row" style="margin-top:24px;">
+        <button class="link-btn" id="printBtn">Print this case</button>
+        <button class="report-btn" id="downloadDetailReportBtn">Download evidence report (PDF)</button>
+        <button class="link-btn" id="deleteBtn" style="color:var(--stamp-red);">Delete this entry</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const TACTIC_META = {
+  urgency:          { label: 'Urgency',            color: '#c98a1f' },
+  scarcity:         { label: 'Scarcity',           color: '#8b5fa3' },
+  money_bait:       { label: 'Money bait',         color: '#4f9268' },
+  false_authority:  { label: 'False authority',    color: '#3f6fa3' },
+  pressure_to_act:  { label: 'Pressure to act',    color: '#b34c40' },
+  excess_caps:      { label: 'Excess CAPS',        color: '#a68b2c' },
+  excess_punct:     { label: 'Excess punctuation', color: '#7a6a9c' },
+  has_url:          { label: 'Contains a link',    color: '#b34c40' },
+  has_phone:        { label: 'Contains a phone #', color: '#3f6fa3' },
+};
+
+const EXAMPLES = {
+  phish: "Your bank account has been suspended. Verify your identity immediately by calling 1-800-555-0199.",
+  normal: "Hey, are we still on for lunch tomorrow at 1pm?",
+};
+
+function escapeHtml(s){
+  return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function renderEvidence(el, text, matches){
+  if(!matches.length){ el.innerHTML = escapeHtml(text); return; }
+  let html = '', cursor = 0;
+  [...matches].sort((a,b)=>a.start-b.start).forEach(m=>{
+    html += escapeHtml(text.slice(cursor, m.start));
+    html += `<mark class="${m.tactic}" title="${m.label}">${escapeHtml(text.slice(m.start, m.end))}</mark>`;
+    cursor = m.end;
+  });
+  html += escapeHtml(text.slice(cursor));
+  el.innerHTML = html;
+}
+
+function renderTactics(el, tactics){
+  const entries = Object.entries(tactics);
+  if(!entries.length){ el.innerHTML = '<div class="empty-log">No manipulation tactics detected.</div>'; return; }
+  entries.sort((a,b)=>b[1]-a[1]);
+  el.innerHTML = entries.map(([key,val], i)=>{
+    const meta = TACTIC_META[key] || {label:key, color:'#888'};
+    const pct = Math.round(val*100);
+    return `
+      <div class="tactic" style="animation: fadeUp .3s ease ${i*0.05}s both">
+        <span><span class="swatch" style="background:${meta.color}"></span>${meta.label}</span>
+        <div class="meter"><i style="width:${pct}%; background:${meta.color}; animation-delay:${i*0.05}s"></i></div>
+        <span class="pct">${pct}%</span>
+      </div>`;
+  }).join('');
+}
+
+function renderNarrative(el, narrative){
+  if(!narrative || !narrative.length){ el.innerHTML = ''; return; }
+  el.innerHTML = narrative.map(p => `<p>${escapeHtml(p)}</p>`).join('');
+}
+
+function fillReadout(prefix, data){
+  document.getElementById(prefix+'Confidence').textContent = Math.round(data.confidence*100)+'%';
+  document.getElementById(prefix+'Text').textContent = Math.round(data.text_model_score*100)+'%';
+  document.getElementById(prefix+'Tactic').textContent = Math.round(data.tactic_score*100)+'%';
+  document.getElementById(prefix+'Verdict').textContent = data.verdict;
+}
+
+function stampLabel(verdict){ return verdict === 'HAM' ? 'CLEARED' : verdict; }
+
+async function api(path, opts={}){
+  const defaultHeaders = (opts.body && !(opts.body instanceof FormData)) ? {'Content-Type':'application/json'} : undefined;
+  const res = await fetch(path, {
+    credentials:'same-origin',
+    ...opts,
+    headers: opts.headers || defaultHeaders,
+  });
+  return res;
+}
+
+/* ======================= AUTH ======================= */
+let mode = 'login'; // or 'signup'
+
+const authUsername = document.getElementById('authUsername');
+const authPassword = document.getElementById('authPassword');
+const authError = document.getElementById('authError');
+const authSubmit = document.getElementById('authSubmit');
+const authTitle = document.getElementById('authTitle');
+const authSub = document.getElementById('authSub');
+const authModeLabel = document.getElementById('authMode');
+
+document.getElementById('toSignupBtn').addEventListener('click', ()=> setMode('signup'));
+document.getElementById('toLoginBtn').addEventListener('click', ()=> setMode('login'));
+
+function setMode(m){
+  mode = m;
+  authError.classList.remove('show');
+  if(m === 'signup'){
+    authTitle.textContent = 'Open a new case file.';
+    authSub.textContent = 'Pick a badge name and passphrase. Your evidence log stays private to this account.';
+    authModeLabel.textContent = 'SIGN UP';
+    authSubmit.textContent = 'Create account';
+    document.getElementById('toSignup').classList.add('hidden');
+    document.getElementById('toLogin').classList.remove('hidden');
+  } else {
+    authTitle.textContent = 'Sign in to open the file.';
+    authSub.textContent = 'Every message you analyze is saved to your personal evidence log — sign in to keep and review it.';
+    authModeLabel.textContent = 'LOGIN';
+    authSubmit.textContent = 'Sign in';
+    document.getElementById('toSignup').classList.remove('hidden');
+    document.getElementById('toLogin').classList.add('hidden');
+  }
+}
+
+authSubmit.addEventListener('click', async ()=>{
+  const username = authUsername.value.trim();
+  const password = authPassword.value;
+  authError.classList.remove('show');
+  if(username.length < 3 || password.length < 6){
+    authError.textContent = 'Username needs 3+ characters, passphrase needs 6+.';
+    authError.classList.add('show');
+    return;
+  }
+  authSubmit.disabled = true;
+  try{
+    const res = await api(mode === 'signup' ? '/api/signup' : '/api/login', {
+      method:'POST', body: JSON.stringify({username, password})
+    });
+    if(!res.ok){
+      const err = await res.json().catch(()=>({detail:'Something went wrong.'}));
+      authError.textContent = err.detail || 'Something went wrong.';
+      authError.classList.add('show');
+      return;
+    }
+    const user = await res.json();
+    enterApp(user);
+  }catch(e){
+    authError.textContent = 'Could not reach the server.';
+    authError.classList.add('show');
+  }finally{
+    authSubmit.disabled = false;
+  }
+});
+
+document.getElementById('logoutBtn').addEventListener('click', async ()=>{
+  await api('/api/logout', {method:'POST'});
+  document.getElementById('appView').classList.add('hidden');
+  document.getElementById('authView').classList.remove('hidden');
+  authUsername.value = ''; authPassword.value = '';
+});
+
+function enterApp(user){
+  document.getElementById('authView').classList.add('hidden');
+  document.getElementById('appView').classList.remove('hidden');
+  document.getElementById('whoUsername').textContent = user.username;
+  showTab('analyze');
+}
+
+/* on load: check session */
+(async function checkSession(){
+  try{
+    const res = await api('/api/me');
+    if(res.ok){
+      const user = await res.json();
+      enterApp(user);
+    }
+  }catch(e){ /* stay on login */ }
+})();
+
+/* ======================= TABS ======================= */
+const tabAnalyze = document.getElementById('tabAnalyze');
+const tabQR = document.getElementById('tabQR');
+const tabLog = document.getElementById('tabLog');
+const panelAnalyze = document.getElementById('panelAnalyze');
+const panelQR = document.getElementById('panelQR');
+const panelLog = document.getElementById('panelLog');
+const panelLogDetail = document.getElementById('panelLogDetail');
+
+function showTab(which){
+  panelAnalyze.classList.toggle('hidden', which !== 'analyze');
+  panelQR.classList.toggle('hidden', which !== 'qr');
+  panelLog.classList.toggle('hidden', which !== 'log');
+  panelLogDetail.classList.add('hidden');
+  tabAnalyze.classList.toggle('active', which === 'analyze');
+  tabQR.classList.toggle('active', which === 'qr');
+  tabLog.classList.toggle('active', which === 'log');
+  if(which === 'log') loadHistory();
+}
+tabAnalyze.addEventListener('click', ()=> showTab('analyze'));
+tabQR.addEventListener('click', ()=> showTab('qr'));
+tabLog.addEventListener('click', ()=> showTab('log'));
+
+/* ======================= ANALYZE ======================= */
+const input = document.getElementById('input');
+const analyzeBtn = document.getElementById('analyzeBtn');
+const results = document.getElementById('results');
+const evidenceEl = document.getElementById('evidence');
+const stampEl = document.getElementById('stamp');
+const analyzeError = document.getElementById('analyzeError');
+const caseNumber = document.getElementById('caseNumber');
+let currentAnalyzeId = null;
+
+document.querySelectorAll('#panelAnalyze .examples button').forEach(b=>{
+  b.addEventListener('click', ()=>{ input.value = EXAMPLES[b.dataset.ex]; runAnalyze(); });
+});
+analyzeBtn.addEventListener('click', runAnalyze);
+input.addEventListener('keydown', (e)=>{ if(e.key==='Enter' && (e.metaKey||e.ctrlKey)) runAnalyze(); });
+
+document.getElementById('downloadReportBtn').addEventListener('click', ()=>{
+  if(currentAnalyzeId == null) return;
+  window.location.href = `/api/history/${currentAnalyzeId}/report`;
+});
+
+async function runAnalyze(){
+  const text = input.value.trim();
+  if(!text) return;
+  analyzeError.classList.remove('show');
+  analyzeBtn.disabled = true;
+  analyzeBtn.textContent = 'Analyzing…';
+  stampEl.className = 'stamp';
+  stampEl.textContent = '';
+
+  try{
+    const res = await api('/api/analyze', {method:'POST', body: JSON.stringify({text})});
+    if(res.status === 401){ handleSignedOut(); return; }
+    if(!res.ok) throw new Error('bad response');
+    const data = await res.json();
+
+    renderEvidence(evidenceEl, data.text, data.matches);
+    renderTactics(document.getElementById('tacticLog'), data.tactics);
+    renderNarrative(document.getElementById('narrative'), data.narrative);
+    fillReadout('ro', data);
+
+    results.classList.add('show');
+    caseNumber.textContent = 'No. ' + String(data.id).padStart(6, '0');
+    currentAnalyzeId = data.id;
+
+    requestAnimationFrame(()=>{
+      stampEl.textContent = stampLabel(data.verdict);
+      stampEl.className = 'stamp show ' + data.verdict;
+    });
+  }catch(err){
+    analyzeError.classList.add('show');
+  }finally{
+    analyzeBtn.disabled = false;
+    analyzeBtn.textContent = 'Analyze message';
+  }
+}
+
+/* ======================= QR ANALYZER ======================= */
+const qrDropZone = document.getElementById('qrDropZone');
+const qrFileInput = document.getElementById('qrFileInput');
+const qrBrowseBtn = document.getElementById('qrBrowseBtn');
+const qrDropContent = document.getElementById('qrDropContent');
+const qrPreviewZone = document.getElementById('qrPreviewZone');
+const qrImagePreview = document.getElementById('qrImagePreview');
+const qrFileName = document.getElementById('qrFileName');
+const qrFileSize = document.getElementById('qrFileSize');
+const qrChangeBtn = document.getElementById('qrChangeBtn');
+const qrAnalyzeBtn = document.getElementById('qrAnalyzeBtn');
+const qrError = document.getElementById('qrError');
+const qrResults = document.getElementById('qrResults');
+const qrDecodedContent = document.getElementById('qrDecodedContent');
+const qrEvidenceEl = document.getElementById('qrEvidence');
+const qrStampEl = document.getElementById('qrStamp');
+const qrCaseNumber = document.getElementById('qrCaseNumber');
+let selectedQrFile = null;
+let currentQrAnalyzeId = null;
+
+function formatBytes(bytes){
+  if(bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function handleQrFileSelect(file){
+  if(!file) return;
+  if(file.type && !file.type.startsWith('image/')){
+    qrError.textContent = 'Please select an image file (PNG, JPG, WEBP, etc.).';
+    qrError.classList.add('show');
+    return;
+  }
+  selectedQrFile = file;
+  qrError.classList.remove('show');
+  qrFileName.textContent = file.name;
+  qrFileSize.textContent = formatBytes(file.size);
+
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    qrImagePreview.src = e.target.result;
+    qrDropContent.classList.add('hidden');
+    qrPreviewZone.classList.remove('hidden');
+    qrAnalyzeBtn.disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+qrBrowseBtn.addEventListener('click', (e)=>{ e.stopPropagation(); qrFileInput.click(); });
+qrChangeBtn.addEventListener('click', (e)=>{ e.stopPropagation(); qrFileInput.click(); });
+qrDropZone.addEventListener('click', (e)=>{
+  if(e.target === qrChangeBtn || e.target === qrBrowseBtn) return;
+  qrFileInput.click();
+});
+
+qrFileInput.addEventListener('change', (e)=>{
+  if(e.target.files && e.target.files[0]){
+    handleQrFileSelect(e.target.files[0]);
+  }
+});
+
+['dragenter', 'dragover'].forEach(name=>{
+  qrDropZone.addEventListener(name, (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    qrDropZone.classList.add('dragover');
+  });
+});
+['dragleave', 'drop'].forEach(name=>{
+  qrDropZone.addEventListener(name, (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    qrDropZone.classList.remove('dragover');
+  });
+});
+qrDropZone.addEventListener('drop', (e)=>{
+  const dt = e.dataTransfer;
+  if(dt && dt.files && dt.files[0]){
+    handleQrFileSelect(dt.files[0]);
+  }
+});
+
+qrAnalyzeBtn.addEventListener('click', runQrAnalyze);
+
+document.getElementById('downloadQrReportBtn').addEventListener('click', ()=>{
+  if(currentQrAnalyzeId == null) return;
+  window.location.href = `/api/history/${currentQrAnalyzeId}/report`;
+});
+
+async function runQrAnalyze(){
+  if(!selectedQrFile) return;
+  qrError.classList.remove('show');
+  qrAnalyzeBtn.disabled = true;
+  qrAnalyzeBtn.textContent = 'Scanning & analyzing…';
+  qrStampEl.className = 'stamp';
+  qrStampEl.textContent = '';
+
+  const formData = new FormData();
+  formData.append('file', selectedQrFile);
+
+  try{
+    const res = await api('/api/analyze-qr', {method:'POST', body: formData});
+    if(res.status === 401){ handleSignedOut(); return; }
+    if(!res.ok){
+      const err = await res.json().catch(()=>({detail:'Failed to decode QR code.'}));
+      qrError.textContent = err.detail || 'No QR code could be found in the image.';
+      qrError.classList.add('show');
+      return;
+    }
+    const data = await res.json();
+
+    qrDecodedContent.textContent = data.text;
+    renderEvidence(qrEvidenceEl, data.text, data.matches);
+    renderTactics(document.getElementById('qrTacticLog'), data.tactics);
+    renderNarrative(document.getElementById('qrNarrative'), data.narrative);
+    fillReadout('roQr', data);
+
+    qrResults.classList.add('show');
+    qrCaseNumber.textContent = 'No. ' + String(data.id).padStart(6, '0');
+    currentQrAnalyzeId = data.id;
+
+    requestAnimationFrame(()=>{
+      qrStampEl.textContent = stampLabel(data.verdict);
+      qrStampEl.className = 'stamp show ' + data.verdict;
+    });
+  }catch(err){
+    qrError.textContent = err.message || 'Something went wrong reaching the server.';
+    qrError.classList.add('show');
+  }finally{
+    qrAnalyzeBtn.disabled = !selectedQrFile;
+    qrAnalyzeBtn.textContent = 'Scan & analyze QR';
+  }
+}
+
+function handleSignedOut(){
+  document.getElementById('appView').classList.add('hidden');
+  document.getElementById('authView').classList.remove('hidden');
+  setMode('login');
+  authError.textContent = 'Your session expired. Please sign in again.';
+  authError.classList.add('show');
+}
+
+/* ======================= EVIDENCE LOG (list) ======================= */
+const logList = document.getElementById('logList');
+const logEmpty = document.getElementById('logEmpty');
+const logCount = document.getElementById('logCount');
+
+async function loadHistory(){
+  const res = await api('/api/history');
+  if(res.status === 401){ handleSignedOut(); return; }
+  const entries = await res.json();
+  logCount.textContent = entries.length + (entries.length === 1 ? ' entry' : ' entries');
+  if(!entries.length){
+    logList.innerHTML = '';
+    logEmpty.classList.remove('hidden');
+    return;
+  }
+  logEmpty.classList.add('hidden');
+  logList.innerHTML = entries.map(e=>{
+    const when = new Date(e.created_at).toLocaleString();
+    const sourceTag = e.source === 'qr' ? '<span class="source-tag">via QR</span>' : '';
+    return `
+      <div class="case-row" data-id="${e.id}">
+        <span class="tag ${e.verdict}">${stampLabel(e.verdict)}</span>
+        <span class="snippet">${sourceTag}${escapeHtml(e.text)}</span>
+        <span class="conf">${Math.round(e.confidence*100)}%</span>
+        <span class="when">${when}</span>
+        <button class="del" data-del="${e.id}" title="Delete">&times;</button>
+      </div>`;
+  }).join('');
+
+  logList.querySelectorAll('.case-row').forEach(row=>{
+    row.addEventListener('click', (e)=>{
+      if(e.target.closest('.del')) return;
+      openDetail(row.dataset.id);
+    });
+  });
+  logList.querySelectorAll('.del').forEach(btn=>{
+    btn.addEventListener('click', async (e)=>{
+      e.stopPropagation();
+      await api(`/api/history/${btn.dataset.del}`, {method:'DELETE'});
+      loadHistory();
+    });
+  });
+}
+
+document.getElementById('exportBtn').addEventListener('click', ()=>{
+  window.location.href = '/api/history/export';
+});
+
+/* ======================= EVIDENCE LOG (detail) ======================= */
+let currentDetailId = null;
+
+async function openDetail(id){
+  const res = await api(`/api/history/${id}`);
+  if(res.status === 401){ handleSignedOut(); return; }
+  if(!res.ok) return;
+  const data = await res.json();
+  currentDetailId = id;
+
+  panelLog.classList.add('hidden');
+  panelLogDetail.classList.remove('hidden');
+
+  const when = new Date(data.created_at).toLocaleString();
+  document.getElementById('detailWhen').textContent = when + (data.source === 'qr' ? ' (via QR)' : '');
+  renderEvidence(document.getElementById('detailEvidence'), data.text, data.matches);
+  renderTactics(document.getElementById('detailTacticLog'), data.tactics);
+  renderNarrative(document.getElementById('detailNarrative'), data.narrative);
+  fillReadout('detail', data);
+
+  const ds = document.getElementById('detailStamp');
+  ds.className = 'stamp'; ds.textContent = '';
+  requestAnimationFrame(()=>{
+    ds.textContent = stampLabel(data.verdict);
+    ds.className = 'stamp show ' + data.verdict;
+  });
+}
+
+document.getElementById('backToLog').addEventListener('click', ()=>{
+  panelLogDetail.classList.add('hidden');
+  panelLog.classList.remove('hidden');
+  loadHistory();
+});
+
+document.getElementById('printBtn').addEventListener('click', ()=> window.print());
+
+document.getElementById('downloadDetailReportBtn').addEventListener('click', ()=>{
+  if(currentDetailId == null) return;
+  window.location.href = `/api/history/${currentDetailId}/report`;
+});
+
+document.getElementById('deleteBtn').addEventListener('click', async ()=>{
+  if(currentDetailId == null) return;
+  await api(`/api/history/${currentDetailId}`, {method:'DELETE'});
+  panelLogDetail.classList.add('hidden');
+  panelLog.classList.remove('hidden');
+  loadHistory();
+});
+</script>
+</body>
+</html>

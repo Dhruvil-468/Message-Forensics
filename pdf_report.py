@@ -132,8 +132,9 @@ def build_case_report_pdf(entry: dict, username: str) -> bytes:
         when = datetime.fromisoformat(entry["created_at"]).strftime("%B %d, %Y at %H:%M UTC")
     except Exception:
         when = entry["created_at"]
+    source_info = " &nbsp;&nbsp;|&nbsp;&nbsp; Source: QR Code" if entry.get("source") == "qr" else ""
     story.append(Paragraph(
-        f"Investigator: <b>{xml_escape(username)}</b> &nbsp;&nbsp;|&nbsp;&nbsp; Filed: {when}",
+        f"Investigator: <b>{xml_escape(username)}</b> &nbsp;&nbsp;|&nbsp;&nbsp; Filed: {when}{source_info}",
         meta_style
     ))
     story.append(HRFlowable(width="100%", thickness=0.6, color=PAPER_DARK, spaceAfter=8))

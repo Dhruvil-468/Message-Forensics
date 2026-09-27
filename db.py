@@ -63,11 +63,18 @@ def init_db():
             tactic_score REAL NOT NULL,
             tactics_json TEXT NOT NULL,
             matches_json TEXT NOT NULL,
-            created_at TEXT NOT NULL
+            created_at TEXT NOT NULL,
+            source TEXT DEFAULT 'text'
         );
         """
     )
     conn.commit()
+    # Additive column migration for existing databases
+    try:
+        conn.execute("ALTER TABLE history ADD COLUMN source TEXT DEFAULT 'text'")
+        conn.commit()
+    except sqlite3.OperationalError:
+        pass
     conn.close()
 
 
@@ -134,12 +141,13 @@ def authenticate(username: str, password: str):
 # ---------------------------------------------------------------------------
 
 def add_history_entry(user_id: int, analysis: dict):
+    source = analysis.get("source", "text")
     conn = get_conn()
     cur = conn.execute(
         """INSERT INTO history
            (user_id, text, verdict, confidence, text_model_score, tactic_score,
-            tactics_json, matches_json, created_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            tactics_json, matches_json, created_at, source)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
         (
             user_id,
             analysis["text"],
@@ -150,6 +158,7 @@ def add_history_entry(user_id: int, analysis: dict):
             json.dumps(analysis["tactics"]),
             json.dumps(analysis["matches"]),
             datetime.now(timezone.utc).isoformat(),
+            source,
         ),
     )
     conn.commit()
@@ -161,12 +170,17 @@ def add_history_entry(user_id: int, analysis: dict):
 def list_history(user_id: int):
     conn = get_conn()
     rows = conn.execute(
-        "SELECT id, text, verdict, confidence, created_at FROM history "
+        "SELECT id, text, verdict, confidence, created_at, source FROM history "
         "WHERE user_id = ? ORDER BY created_at DESC",
         (user_id,),
     ).fetchall()
     conn.close()
-    return [dict(r) for r in rows]
+    out = []
+    for r in rows:
+        d = dict(r)
+        d.setdefault("source", "text")
+        out.append(d)
+    return out
 
 
 def get_history_entry(user_id: int, entry_id: int):
@@ -180,6 +194,7 @@ def get_history_entry(user_id: int, entry_id: int):
     d = dict(row)
     d["tactics"] = json.loads(d.pop("tactics_json"))
     d["matches"] = json.loads(d.pop("matches_json"))
+    d.setdefault("source", "text")
     return d
 
 
@@ -205,5 +220,6 @@ def export_history(user_id: int):
         d = dict(r)
         d["tactics"] = json.loads(d.pop("tactics_json"))
         d["matches"] = json.loads(d.pop("matches_json"))
+        d.setdefault("source", "text")
         out.append(d)
     return out

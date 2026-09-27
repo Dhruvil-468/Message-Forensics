@@ -239,6 +239,36 @@
   .examples{ font-size:12px; color:#5c5747; }
   .examples button{ margin-right:10px; }
 
+  /* ---------- QR drop zone & source tags ---------- */
+  .drop-zone{
+    width:100%;
+    background:#f2ecd8;
+    border:2px dashed var(--line);
+    border-left:3px solid var(--navy);
+    border-radius:2px;
+    padding:28px 20px;
+    text-align:center;
+    cursor:pointer;
+    transition:border-color 0.15s ease, background 0.15s ease;
+  }
+  .drop-zone:hover, .drop-zone.dragover{
+    border-color:var(--navy);
+    background:#ece4ce;
+    border-left-color:var(--stamp-red);
+  }
+  .drop-zone-content{ display:flex; flex-direction:column; align-items:center; gap:8px; }
+  .drop-icon{ font-size:26px; line-height:1; color:var(--navy); }
+  .drop-prompt{ font-size:14px; color:var(--ink); }
+  .drop-hint{ font-size:11px; color:#7a7461; }
+  .drop-file-preview{ display:flex; align-items:center; justify-content:center; gap:18px; text-align:left; }
+  .source-tag{
+    font-family:'IBM Plex Sans', sans-serif; font-size:9px; font-weight:700;
+    letter-spacing:0.06em; text-transform:uppercase;
+    background:var(--navy); color:var(--paper);
+    padding:2px 5px; border-radius:2px; vertical-align:middle;
+    margin-right:6px; display:inline-block;
+  }
+
   /* ---------- evidence log (history) ---------- */
   .log-toolbar{ display:flex; justify-content:space-between; align-items:center; margin-bottom:18px; gap:10px; flex-wrap:wrap; }
   .log-count{ font-size:12px; color:#5c5747; }
@@ -333,6 +363,7 @@
       <div class="tab">CASE FILE</div>
       <div class="tabs">
         <button id="tabAnalyze" class="active">Analyze</button>
+        <button id="tabQR">QR Analyzer</button>
         <button id="tabLog">Evidence Log</button>
       </div>
     </div>
@@ -384,6 +415,72 @@
 
       <div class="footer-note">
         Trained on the SMS Spam Collection dataset (5,572 real messages). The tactic layer is rule-based on top of the ML model — verdicts are model output, not a guarantee. When in doubt about a real message, don't click the link.
+      </div>
+    </div>
+
+    <!-- ---------- QR ANALYZER PANEL ---------- -->
+    <div class="card hidden" id="panelQR">
+      <div class="eyebrow"><span>QR Forensics</span><span id="qrCaseNumber">No. 000001</span></div>
+      <h1>Upload a QR code. We'll decode and inspect it.</h1>
+      <p class="sub">Drag &amp; drop or select an image containing a QR code. We decode the embedded payload, check it against manipulation tactics and phishing patterns, and stamp the verdict into your evidence log.</p>
+
+      <div class="drop-zone" id="qrDropZone">
+        <input type="file" id="qrFileInput" accept="image/*" class="hidden">
+        <div class="drop-zone-content" id="qrDropContent">
+          <div class="drop-icon">&#9974;</div>
+          <div class="drop-prompt"><strong>Drop a QR code image here</strong> or <button type="button" class="link-btn" id="qrBrowseBtn">browse files</button></div>
+          <div class="drop-hint">Supports PNG, JPG, JPEG, WEBP, BMP</div>
+        </div>
+        <div class="drop-file-preview hidden" id="qrPreviewZone">
+          <img id="qrImagePreview" alt="QR Preview" style="max-height:130px; max-width:130px; border:1px solid var(--line); border-radius:2px; object-fit:contain; background:#f2ecd8;">
+          <div style="display:flex; flex-direction:column; gap:4px;">
+            <span id="qrFileName" style="font-family:'Courier Prime', monospace; font-size:13px; font-weight:700; word-break:break-all;"></span>
+            <span id="qrFileSize" style="font-size:11px; color:#5c5747;"></span>
+            <button type="button" class="link-btn" id="qrChangeBtn" style="align-self:flex-start; margin-top:6px;">Choose another image</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="row">
+        <div></div>
+        <button class="primary" id="qrAnalyzeBtn" style="width:auto;" disabled>Scan &amp; analyze QR</button>
+      </div>
+      <div class="error" id="qrError">Something went wrong analyzing the QR code.</div>
+
+      <hr class="divider">
+
+      <div class="results" id="qrResults">
+        <div class="field" style="margin-bottom:22px;">
+          <div class="evidence-label">Decoded content:</div>
+          <div class="evidence" id="qrDecodedContent" style="font-size:14px; padding:12px 16px; background:#ece4cd; border-left:3px solid var(--navy);"></div>
+        </div>
+
+        <div class="evidence-label">Evidence — annotated</div>
+        <div class="evidence" id="qrEvidence"></div>
+
+        <div class="stamp-zone"><div class="stamp" id="qrStamp"></div></div>
+
+        <div class="readout">
+          <div><span>Overall confidence</span><span id="roQrConfidence">—</span></div>
+          <div><span>Word-pattern score</span><span id="roQrText">—</span></div>
+          <div><span>Tactic score</span><span id="roQrTactic">—</span></div>
+          <div><span>Verdict</span><span id="roQrVerdict">—</span></div>
+        </div>
+
+        <div class="tactic-log-label">Tactic log</div>
+        <div id="qrTacticLog"></div>
+
+        <div class="narrative-label">How we reached this verdict</div>
+        <div class="narrative" id="qrNarrative"></div>
+
+        <div class="row" style="margin-top:22px;">
+          <span style="font-size:11px; color:#7a7461;">Saved to your evidence log automatically.</span>
+          <button class="report-btn" id="downloadQrReportBtn">Download evidence report (PDF)</button>
+        </div>
+      </div>
+
+      <div class="footer-note">
+        QR codes are frequently used in quishing attacks to evade message filters by concealing malicious URLs in image payloads. Payloads are decoded and tested against the same hybrid ML and heuristic tactic engine.
       </div>
     </div>
 
@@ -499,10 +596,11 @@ function fillReadout(prefix, data){
 function stampLabel(verdict){ return verdict === 'HAM' ? 'CLEARED' : verdict; }
 
 async function api(path, opts={}){
+  const defaultHeaders = (opts.body && !(opts.body instanceof FormData)) ? {'Content-Type':'application/json'} : undefined;
   const res = await fetch(path, {
     credentials:'same-origin',
-    headers: opts.body ? {'Content-Type':'application/json'} : undefined,
     ...opts,
+    headers: opts.headers || defaultHeaders,
   });
   return res;
 }
@@ -598,20 +696,25 @@ function enterApp(user){
 
 /* ======================= TABS ======================= */
 const tabAnalyze = document.getElementById('tabAnalyze');
+const tabQR = document.getElementById('tabQR');
 const tabLog = document.getElementById('tabLog');
 const panelAnalyze = document.getElementById('panelAnalyze');
+const panelQR = document.getElementById('panelQR');
 const panelLog = document.getElementById('panelLog');
 const panelLogDetail = document.getElementById('panelLogDetail');
 
 function showTab(which){
   panelAnalyze.classList.toggle('hidden', which !== 'analyze');
+  panelQR.classList.toggle('hidden', which !== 'qr');
   panelLog.classList.toggle('hidden', which !== 'log');
   panelLogDetail.classList.add('hidden');
   tabAnalyze.classList.toggle('active', which === 'analyze');
+  tabQR.classList.toggle('active', which === 'qr');
   tabLog.classList.toggle('active', which === 'log');
   if(which === 'log') loadHistory();
 }
 tabAnalyze.addEventListener('click', ()=> showTab('analyze'));
+tabQR.addEventListener('click', ()=> showTab('qr'));
 tabLog.addEventListener('click', ()=> showTab('log'));
 
 /* ======================= ANALYZE ======================= */
@@ -671,6 +774,140 @@ async function runAnalyze(){
   }
 }
 
+/* ======================= QR ANALYZER ======================= */
+const qrDropZone = document.getElementById('qrDropZone');
+const qrFileInput = document.getElementById('qrFileInput');
+const qrBrowseBtn = document.getElementById('qrBrowseBtn');
+const qrDropContent = document.getElementById('qrDropContent');
+const qrPreviewZone = document.getElementById('qrPreviewZone');
+const qrImagePreview = document.getElementById('qrImagePreview');
+const qrFileName = document.getElementById('qrFileName');
+const qrFileSize = document.getElementById('qrFileSize');
+const qrChangeBtn = document.getElementById('qrChangeBtn');
+const qrAnalyzeBtn = document.getElementById('qrAnalyzeBtn');
+const qrError = document.getElementById('qrError');
+const qrResults = document.getElementById('qrResults');
+const qrDecodedContent = document.getElementById('qrDecodedContent');
+const qrEvidenceEl = document.getElementById('qrEvidence');
+const qrStampEl = document.getElementById('qrStamp');
+const qrCaseNumber = document.getElementById('qrCaseNumber');
+let selectedQrFile = null;
+let currentQrAnalyzeId = null;
+
+function formatBytes(bytes){
+  if(bytes === 0) return '0 Bytes';
+  const k = 1024;
+  const sizes = ['Bytes', 'KB', 'MB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+}
+
+function handleQrFileSelect(file){
+  if(!file) return;
+  if(file.type && !file.type.startsWith('image/')){
+    qrError.textContent = 'Please select an image file (PNG, JPG, WEBP, etc.).';
+    qrError.classList.add('show');
+    return;
+  }
+  selectedQrFile = file;
+  qrError.classList.remove('show');
+  qrFileName.textContent = file.name;
+  qrFileSize.textContent = formatBytes(file.size);
+
+  const reader = new FileReader();
+  reader.onload = (e)=>{
+    qrImagePreview.src = e.target.result;
+    qrDropContent.classList.add('hidden');
+    qrPreviewZone.classList.remove('hidden');
+    qrAnalyzeBtn.disabled = false;
+  };
+  reader.readAsDataURL(file);
+}
+
+qrBrowseBtn.addEventListener('click', (e)=>{ e.stopPropagation(); qrFileInput.click(); });
+qrChangeBtn.addEventListener('click', (e)=>{ e.stopPropagation(); qrFileInput.click(); });
+qrDropZone.addEventListener('click', (e)=>{
+  if(e.target === qrChangeBtn || e.target === qrBrowseBtn) return;
+  qrFileInput.click();
+});
+
+qrFileInput.addEventListener('change', (e)=>{
+  if(e.target.files && e.target.files[0]){
+    handleQrFileSelect(e.target.files[0]);
+  }
+});
+
+['dragenter', 'dragover'].forEach(name=>{
+  qrDropZone.addEventListener(name, (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    qrDropZone.classList.add('dragover');
+  });
+});
+['dragleave', 'drop'].forEach(name=>{
+  qrDropZone.addEventListener(name, (e)=>{
+    e.preventDefault(); e.stopPropagation();
+    qrDropZone.classList.remove('dragover');
+  });
+});
+qrDropZone.addEventListener('drop', (e)=>{
+  const dt = e.dataTransfer;
+  if(dt && dt.files && dt.files[0]){
+    handleQrFileSelect(dt.files[0]);
+  }
+});
+
+qrAnalyzeBtn.addEventListener('click', runQrAnalyze);
+
+document.getElementById('downloadQrReportBtn').addEventListener('click', ()=>{
+  if(currentQrAnalyzeId == null) return;
+  window.location.href = `/api/history/${currentQrAnalyzeId}/report`;
+});
+
+async function runQrAnalyze(){
+  if(!selectedQrFile) return;
+  qrError.classList.remove('show');
+  qrAnalyzeBtn.disabled = true;
+  qrAnalyzeBtn.textContent = 'Scanning & analyzing…';
+  qrStampEl.className = 'stamp';
+  qrStampEl.textContent = '';
+
+  const formData = new FormData();
+  formData.append('file', selectedQrFile);
+
+  try{
+    const res = await api('/api/analyze-qr', {method:'POST', body: formData});
+    if(res.status === 401){ handleSignedOut(); return; }
+    if(!res.ok){
+      const err = await res.json().catch(()=>({detail:'Failed to decode QR code.'}));
+      qrError.textContent = err.detail || 'No QR code could be found in the image.';
+      qrError.classList.add('show');
+      return;
+    }
+    const data = await res.json();
+
+    qrDecodedContent.textContent = data.text;
+    renderEvidence(qrEvidenceEl, data.text, data.matches);
+    renderTactics(document.getElementById('qrTacticLog'), data.tactics);
+    renderNarrative(document.getElementById('qrNarrative'), data.narrative);
+    fillReadout('roQr', data);
+
+    qrResults.classList.add('show');
+    qrCaseNumber.textContent = 'No. ' + String(data.id).padStart(6, '0');
+    currentQrAnalyzeId = data.id;
+
+    requestAnimationFrame(()=>{
+      qrStampEl.textContent = stampLabel(data.verdict);
+      qrStampEl.className = 'stamp show ' + data.verdict;
+    });
+  }catch(err){
+    qrError.textContent = err.message || 'Something went wrong reaching the server.';
+    qrError.classList.add('show');
+  }finally{
+    qrAnalyzeBtn.disabled = !selectedQrFile;
+    qrAnalyzeBtn.textContent = 'Scan & analyze QR';
+  }
+}
+
 function handleSignedOut(){
   document.getElementById('appView').classList.add('hidden');
   document.getElementById('authView').classList.remove('hidden');
@@ -697,10 +934,11 @@ async function loadHistory(){
   logEmpty.classList.add('hidden');
   logList.innerHTML = entries.map(e=>{
     const when = new Date(e.created_at).toLocaleString();
+    const sourceTag = e.source === 'qr' ? '<span class="source-tag">via QR</span>' : '';
     return `
       <div class="case-row" data-id="${e.id}">
         <span class="tag ${e.verdict}">${stampLabel(e.verdict)}</span>
-        <span class="snippet">${escapeHtml(e.text)}</span>
+        <span class="snippet">${sourceTag}${escapeHtml(e.text)}</span>
         <span class="conf">${Math.round(e.confidence*100)}%</span>
         <span class="when">${when}</span>
         <button class="del" data-del="${e.id}" title="Delete">&times;</button>
@@ -739,7 +977,8 @@ async function openDetail(id){
   panelLog.classList.add('hidden');
   panelLogDetail.classList.remove('hidden');
 
-  document.getElementById('detailWhen').textContent = new Date(data.created_at).toLocaleString();
+  const when = new Date(data.created_at).toLocaleString();
+  document.getElementById('detailWhen').textContent = when + (data.source === 'qr' ? ' (via QR)' : '');
   renderEvidence(document.getElementById('detailEvidence'), data.text, data.matches);
   renderTactics(document.getElementById('detailTacticLog'), data.tactics);
   renderNarrative(document.getElementById('detailNarrative'), data.narrative);

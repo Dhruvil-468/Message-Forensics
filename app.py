@@ -24,7 +24,7 @@ import re
 from pathlib import Path
 from datetime import datetime, timezone
 
-from fastapi import FastAPI, HTTPException, Depends, Request, Response
+from fastapi import FastAPI, HTTPException, Depends, Request, Response, UploadFile, File
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel, Field, field_validator
@@ -34,6 +34,7 @@ import auth
 from spam_detector import HybridSpamDetector, load_data
 from narrative import generate_narrative
 from pdf_report import build_case_report_pdf
+from qr_reader import decode_qr
 
 BASE_DIR = Path(__file__).parent
 
@@ -124,6 +125,34 @@ def analyze(req: AnalyzeRequest, user_id: int = Depends(auth.get_current_user_id
     if not text:
         raise HTTPException(status_code=400, detail="Message text cannot be empty.")
     result = model.analyze(text)
+    result["source"] = "text"
+    entry_id = db.add_history_entry(user_id, result)
+    result["id"] = entry_id
+    return result
+
+
+@app.post("/api/analyze-qr")
+def analyze_qr(file: UploadFile = File(...), user_id: int = Depends(auth.get_current_user_id)):
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="No image file provided.")
+
+    try:
+        contents = file.file.read()
+    except Exception:
+        raise HTTPException(status_code=400, detail="Could not read uploaded image file.")
+
+    if not contents:
+        raise HTTPException(status_code=400, detail="Uploaded file is empty.")
+
+    decoded_text = decode_qr(contents)
+    if not decoded_text:
+        raise HTTPException(
+            status_code=400,
+            detail="No QR code could be detected in the uploaded image. Please ensure the QR code is clear, well-lit, and unobstructed.",
+        )
+
+    result = model.analyze(decoded_text)
+    result["source"] = "qr"
     entry_id = db.add_history_entry(user_id, result)
     result["id"] = entry_id
     return result
